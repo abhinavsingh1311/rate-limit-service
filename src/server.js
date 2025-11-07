@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const { config } = require('./config/index');
 const { requestLogger } = require('./middleware/requestLogger');
-const { default: helmet } = require('helmet');
+const helmet = require('helmet');
+const healthRoutes = require('./routes/health');
+const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandling');
 
 const createServer = () => {
 
@@ -15,14 +17,16 @@ const createServer = () => {
         .use(cors())
         .use(requestLogger)
 
-    server.get('/health', (req, res) => {
-        res.json({ ok: true, environment: config.env });
-    })
+
+    server.use('/health', healthRoutes);
 
     server.get('/', (req, res) => {
         res.send('<p>Hello!</p>');
     })
 
+        //Error handling
+        .use(notFoundHandler)
+        .use(globalErrorHandler)
     return server;
 }
 
