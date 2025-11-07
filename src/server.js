@@ -5,6 +5,8 @@ const { requestLogger } = require('./middleware/requestLogger');
 const helmet = require('helmet');
 const healthRoutes = require('./routes/health');
 const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandling');
+const { Logger } = require('./utils/logger');
+const { disconnect } = require('./config/redis');
 
 const createServer = () => {
 
@@ -23,13 +25,47 @@ const createServer = () => {
     server.get('/', (req, res) => {
         res.send('<p>Hello!</p>');
     })
-
-        //Error handling
+    //Error handling
+    server
         .use(notFoundHandler)
         .use(globalErrorHandler)
+
     return server;
+};
+
+const gracefulShutdown = async (server) => {
+    try {
+        Logger.info("Shutting down gracefully");
+
+        //TODO:  close redis connection later
+        Logger.info('Closing redis connection....')
+        await disconnect();
+        //close express server
+        if (server) {
+            await new Promise((res, rej) => {
+                server.close((err) => {
+                    if (err) {
+                        rej(err)
+                        return;
+                    }
+                    res();
+                })
+
+            });
+
+            Logger.info("Express Server closed");
+        }
+
+        //exits process(0)
+        process.exit(0);
+    }
+    catch (err) {
+        Logger.error(`Error during shutdown: ${err.message}`);
+        process.exit(1);
+    }
 }
 
 module.exports = {
-    createServer
+    createServer,
+    gracefulShutdown
 }

@@ -5,7 +5,8 @@ const config = {
     logLevel: process.env.LOG_LEVEL || "info",
     appSecret: process.env.APP_SECRET || "",
     issuerBaseUrl: process.env.ISSUER_BASE_URL || '',
-    audience: process.env.AUDIENCE || ''
+    audience: process.env.AUDIENCE || '',
+    redisURL: process.env.REDIS_URL
 
 }
 
