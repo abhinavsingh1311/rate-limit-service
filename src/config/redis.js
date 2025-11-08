@@ -1,10 +1,9 @@
 const { createClient } = require('redis');
 const { config } = require('.');
 const { Logger } = require('../utils/logger');
-const { cli } = require('winston/lib/winston/config');
 
 const client = createClient({
-    url: config.redisURL
+    url: config.redisUrl
 });
 
 client.on('error', err => console.log('Redis Client Error', err));
