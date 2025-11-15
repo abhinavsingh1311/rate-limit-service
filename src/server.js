@@ -7,30 +7,39 @@ const healthRoutes = require('./routes/health');
 const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandling');
 const { Logger } = require('./utils/logger');
 const { disconnect } = require('./config/redis');
+const apiRoutes = require('./routes/api');
 
 const createServer = () => {
+    try {
 
-    const server = express();
+        const server = express();
 
-    server
-        .use(helmet())
-        .use(express.urlencoded({ extended: true }))
-        .use(express.json())
-        .use(cors())
-        .use(requestLogger)
+        server
+            .use(helmet())
+            .use(express.urlencoded({ extended: true }))
+            .use(express.json())
+            .use(cors())
+            .use(requestLogger)
 
 
-    server.use('/health', healthRoutes);
+        server.use('/health', healthRoutes);
+        server.use('/api', apiRoutes);
+        server.get('/', (req, res) => {
+            res.send('<p>Hello!</p>');
+        })
 
-    server.get('/', (req, res) => {
-        res.send('<p>Hello!</p>');
-    })
-    //Error handling
-    server
-        .use(notFoundHandler)
-        .use(globalErrorHandler)
 
-    return server;
+
+        //Error handling
+        server
+            .use(notFoundHandler)
+            .use(globalErrorHandler)
+
+        return server;
+    }
+    catch (ex) {
+        Logger.warning(`Error setting up the server: ${ex}`);
+    }
 };
 
 const gracefulShutdown = async (server) => {
