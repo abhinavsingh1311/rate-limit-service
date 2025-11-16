@@ -4,7 +4,8 @@ const {
     getTenantById,
     updateTenant,
     deleteTenant,
-    listTenants
+    listTenants,
+    clearAllBuckets
 } = require('../middleware/tenants');
 
 const router = express.Router();
@@ -23,5 +24,7 @@ router.put('/:id', updateTenant);
 
 // Delete tenant
 router.delete('/:id', deleteTenant);
+
+router.post('/admin/clear-buckets', clearAllBuckets);
 
 module.exports = router;

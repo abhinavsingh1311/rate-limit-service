@@ -363,10 +363,30 @@ const listTenants = async (req, res) => {
     }
 };
 
+const clearAllBuckets = async (req, res) => {
+    try {
+        const rateLimiter = require('../services/rateLimiter');
+        await rateLimiter.clearAllBuckets();
+
+        Logger.info('All rate limit buckets cleared');
+
+        return res.status(200).json({
+            message: 'All rate limit buckets cleared successfully'
+        });
+    } catch (error) {
+        Logger.error(`Failed to clear buckets: ${error.message}`);
+        return res.status(500).json({
+            error: 'Internal Server Error',
+            message: 'Failed to clear buckets'
+        });
+    }
+};
+
 module.exports = {
     createTenant,
     getTenantById,
     updateTenant,
     deleteTenant,
-    listTenants
+    listTenants,
+    clearAllBuckets
 };

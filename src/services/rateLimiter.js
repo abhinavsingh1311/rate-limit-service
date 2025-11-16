@@ -1,4 +1,3 @@
-
 const { getRateLimitsByTier } = require("../config/rateLimits");
 const { client } = require("../config/redis");
 const { Logger } = require("../utils/logger");
@@ -19,12 +18,14 @@ class rateLimiterService {
             capacity: limits.burst.toString(),
             tokens: limits.burst.toString(),
             lastRefill: Date.now().toString(),
-            refillRate: (limits.rpm / 60 / 1000).toString()
-        }
-        await client.hSet(this.getBucketKeyById(tenantId), {
-            ...bucket
-        });
+            refillRate: (limits.rpm / 60 / 1000).toString(),
+            tier: tier  // Store tier to detect changes
+        };
+
+        await client.hSet(this.getBucketKeyById(tenantId), bucket);
         await client.expire(this.getBucketKeyById(tenantId), 3600);
+
+        Logger.info(`[${tenantId}] Initialized bucket for tier ${tier}: capacity=${limits.burst}, rpm=${limits.rpm}`);
         return bucket;
     }
 
@@ -32,7 +33,11 @@ class rateLimiterService {
         const bucketKey = this.getBucketKeyById(tenantId);
         let bucket = await client.hGetAll(bucketKey);
 
-        if (!bucket || Object.keys(bucket).length === 0) {
+        // If bucket doesn't exist OR tier has changed, reinitialize
+        if (!bucket || Object.keys(bucket).length === 0 || bucket.tier !== tier) {
+            if (bucket.tier && bucket.tier !== tier) {
+                Logger.info(`[${tenantId}] Tier changed from ${bucket.tier} to ${tier}, reinitializing bucket`);
+            }
             bucket = await this.initializeBucket(tenantId, tier);
         }
 
@@ -45,9 +50,26 @@ class rateLimiterService {
         };
     }
 
+    // NEW: Clear bucket for a tenant (useful for testing)
+    async clearBucket(tenantId) {
+        const bucketKey = this.getBucketKeyById(tenantId);
+        await client.del(bucketKey);
+        Logger.info(`[${tenantId}] Bucket cleared`);
+    }
+
+    // NEW: Clear all rate limit buckets
+    async clearAllBuckets() {
+        const keys = await client.keys(`${this.redisKeyProfile}:*`);
+        if (keys.length > 0) {
+            await client.del(keys);
+            Logger.info(`Cleared ${keys.length} rate limit buckets`);
+        }
+    }
+
     async checkRateLimit(tenantId, tier) {
         const bucket = await this.getBucket(tenantId, tier);
-        Logger.info(`[${tenantId}] Before check - Tokens: ${bucket.tokens}, lastRefill: ${bucket.lastRefill} `)
+        Logger.info(`[${tenantId}] Before check - Tokens: ${bucket.tokens}, Capacity: ${bucket.capacity}, Tier: ${bucket.tier || tier}`);
+
         const tokenBucket = new TokenBucket(
             bucket.capacity,
             bucket.refillRate * 60 * 1000,
@@ -73,7 +95,6 @@ class rateLimiterService {
 
             const verify = await client.hGetAll(this.getBucketKeyById(tenantId));
             Logger.info(`[${tenantId}] Verified Redis - Tokens: ${verify.tokens}`);
-
         }
 
         const response = {
@@ -82,16 +103,15 @@ class rateLimiterService {
             limit: bucket.capacity,
             resetTime: Date.now() + Math.ceil(timeToNextTokenMs),
             retryAfter: Math.ceil(timeToNextTokenMs / 1000)
-        }
+        };
 
         if (!allowed) {
             response.error = 'Rate Limit Exceeded';
             response.statusCode = 429;
         }
 
-        return response
+        return response;
     }
-
 }
 
 module.exports = new rateLimiterService();

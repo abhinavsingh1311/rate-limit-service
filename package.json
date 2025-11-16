@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "seed": "node src/scripts/seedTenants.js",
     "test": "jest",
+    "test:isolation": "node src/tests/isolation-tests.js",
     "docker:build": "docker build -t rate-limiter .",
     "docker:run": "docker-compose up -d"
   },
