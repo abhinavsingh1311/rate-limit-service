@@ -1,27 +1,7 @@
 const { client } = require("../config/redis");
 const rateLimiter = require("../services/rateLimiter");
+const tenantService = require("../services/tenantService");
 const { Logger } = require("../utils/logger");
-
-const TENANT_STORE = {
-    'test-free-key-123': { id: 'tenant-1', tier: 'free', name: 'Test Free User' },
-    'test-premium-key-456': { id: 'tenant-2', tier: 'premium', name: 'Test Premium User' },
-    'test-enterprise-key-789': { id: 'tenant-3', tier: 'enterprise', name: 'Test Enterprise User' }
-};
-
-const getTenantFromApiKey = async (apiKey) => {
-    try {
-        // const tenant = client.query("SELECT id FROM tenants where api_key=?", apiKey);
-        const tenant = TENANT_STORE[apiKey];
-
-        return tenant;
-
-    }
-    catch (err) {
-        Logger.error(`Error: ${err}`);
-        return null;
-    }
-
-}
 
 const rateLimiterMiddleware = async (req, res, next) => {
     const apiKey = req.get('X-API-Key') || req.headers['x-api-key'];
@@ -33,7 +13,7 @@ const rateLimiterMiddleware = async (req, res, next) => {
         });
     }
 
-    const tenant = await getTenantFromApiKey(apiKey);
+    const tenant = await tenantService.getTenantByApiKey(apiKey);
     if (!tenant) {
         Logger.warning(`Invalid API key attempted: ${apiKey.substring(0, 10)}...`);
         return res.status(401).json({
@@ -42,10 +22,19 @@ const rateLimiterMiddleware = async (req, res, next) => {
         });
     }
 
-    const tier = tenant.tier || 'free';
+    if (!tenant.isActive) {
+        Logger.warning(`Inactive tenant attempted access: ${tenant.id}`);
+        return res.status(403).json({
+            error: 'Forbidden',
+            message: 'Your account has been deactivated. Please contact support.'
+        });
+    }
+
+    const tier = tenant.tier;
     const tenantId = tenant.id;
 
-    Logger.info(`[${tenantId}] Rate limit check - Tier: ${tier}`);
+    // Log the request for this tenant
+    Logger.info(`[${tenantId}] Rate limit check - Tier: ${tier}, Name: ${tenant.name}`);
 
 
     try {
@@ -70,11 +59,17 @@ const rateLimiterMiddleware = async (req, res, next) => {
                 resetTime: result.resetTime
             });
         }
+        req.tenant = tenant;
+        Logger.info(`[${tenantId}] Request allowed - Remaining: ${result.remaining}`);
+
         next();
     }
 
     catch (ex) {
-        Logger.error(`Error fetching results:${ex.message}`);
+        Logger.error(`Rate limiter error: ${error.message}\nStack: ${error.stack}`);
+
+        // Fail open: allow request but log error
+        Logger.warning(`Allowing request due to rate limiter error (fail-open mode)`);
         return next();
     }
 
@@ -82,7 +77,6 @@ const rateLimiterMiddleware = async (req, res, next) => {
 }
 
 module.exports = {
-    rateLimiterMiddleware,
-    getTenantFromApiKey,
-    TENANT_STORE
+    rateLimiterMiddleware
 };
+
