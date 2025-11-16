@@ -8,6 +8,7 @@ const { globalErrorHandler, notFoundHandler } = require('./middleware/errorHandl
 const { Logger } = require('./utils/logger');
 const { disconnect } = require('./config/redis');
 const apiRoutes = require('./routes/api');
+const tenantRoutes = require('./routes/tenants');
 
 const createServer = () => {
     try {
@@ -24,6 +25,8 @@ const createServer = () => {
 
         server.use('/health', healthRoutes);
         server.use('/api', apiRoutes);
+        server.use('/api/v1/tenants', tenantRoutes);
+
         server.get('/', (req, res) => {
             res.send('<p>Hello!</p>');
         })
